@@ -67,11 +67,42 @@ router.post('/csv', upload.single('myFile'), (req, res, next) => {
       return next(new Error('File size too large'));      
     }
     const parsing = parseCSV(req.file, output => {
-      const newRows = output.map(row => rowBuilder(row));
-      query.post(newRows)
+      const uniqueEmployees = output.map(row => {
+        return {
+          name: row['employee name'],
+          address: row['employee address'],
+        };
+      })
+      .reduce((agg, next) => {
+        if (agg.find(employee => employee.name === next.name) !== undefined) {
+          return agg;
+        }
+        agg.push(next);
+        return agg;
+      }, []);
+      const uniqueNames = uniqueEmployees.map(employee => employee.name);
+      knex('employees').select('name').whereIn('name', uniqueNames)
+        .then(currentEmployees => {
+          const current = currentEmployees.map(employee => employee.name);
+          return uniqueEmployees.filter(employee => !current.includes(employee.name));
+        })
+        .then(newEmployees => {
+          if (newEmployees.length > 0) {
+            return knex('employees').insert(filtered);
+          }
+          return;
+        })
+        .then(() => knex('employees').select('id', 'name').whereIn('name', uniqueNames))
+        .then(employeeMap => {
+          return output.map(row => rowBuilder(row)).map(row => {
+            row.name = employeeMap.find(employee => employee.name === row.name).id;
+            return row;
+          });
+        })
+        .then(newRows => query.post(newRows))
         .then(ids => getExpenses().whereIn('id', ids))
         .then(expenses => res.status(200).json(expenses))
-        .catch(error => next(error));
+        .catch(error => next(error))
     });
     if (!parsing) {
       return next(new Error('Broken'));

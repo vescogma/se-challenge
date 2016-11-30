@@ -32,6 +32,9 @@ function rowBuilder(row) {
   for (key in row) {
     const mappedKey = CSV_DB_MAP[key];
     switch (mappedKey) {
+      case 'address':
+        break;
+
       case 'date':
         const newDate = row[key].split('/');
         mapResult[mappedKey] = `${newDate[2]}-${newDate[0]}-${newDate[1]}`;
